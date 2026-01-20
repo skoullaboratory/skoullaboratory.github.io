@@ -33,13 +33,13 @@ body {
     transition: all 0.3s ease;
 }
 
-/* Clases para ocultar paneles */
+/* Estados colapsados */
 .app-grid.hide-left { grid-template-columns: 0px 1fr var(--sidebar-width); }
 .app-grid.hide-right { grid-template-columns: var(--sidebar-width) 1fr 0px; }
 .app-grid.hide-left.hide-right { grid-template-columns: 0px 1fr 0px; }
 .app-grid.hide-bottom { grid-template-rows: 1fr 0px; }
 
-/* --- PANELES GENERALES --- */
+/* --- PANELES --- */
 .panel { background-color: var(--bg-panel); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .sidebar { border-right: 1px solid var(--border); border-left: 1px solid var(--border); position: relative; z-index: 20; }
 .sidebar.left { grid-column: 1; grid-row: 1; }
@@ -47,7 +47,7 @@ body {
 .viewport { grid-column: 2; grid-row: 1; background-color: #0d0d0d; position: relative; display: flex; align-items: center; justify-content: center; z-index: 10; }
 .timeline { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--border); z-index: 20; }
 
-/* --- HEADER Y CONTENIDO --- */
+/* --- HEADER --- */
 .panel-header { 
     background-color: #252526; color: var(--text-muted); font-size: 11px; font-weight: bold; 
     padding: 8px 12px; border-bottom: 1px solid var(--border); 
@@ -57,7 +57,7 @@ body {
 .panel-content { padding: 15px; overflow-y: auto; flex: 1; }
 .separator { height: 1px; background-color: var(--border); margin: 15px 0; }
 
-/* --- BOTONES DE RESTAURAR --- */
+/* --- BOTONES RESTAURAR --- */
 .restore-panel-btn {
     position: absolute; background-color: var(--accent); color: white; border: none; z-index: 100;
     cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center;
@@ -66,7 +66,7 @@ body {
 .restore-panel-btn.right { top: 50%; right: 0; width: 20px; height: 50px; transform: translateY(-50%); border-radius: 4px 0 0 4px; }
 .restore-panel-btn.bottom { bottom: 0; right: 20px; width: 40px; height: 20px; border-radius: 4px 4px 0 0; }
 
-/* --- CONTROLES DE UI --- */
+/* --- CONTROLES --- */
 .control-group { margin-bottom: 15px; }
 .control-group label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; }
 .slider-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
@@ -75,7 +75,14 @@ body {
 button { border: 1px solid var(--border); background-color: var(--bg-tool); color: var(--text-main); border-radius: 3px; cursor: pointer; transition: 0.1s; }
 button:hover { background-color: var(--bg-hover); }
 
-/* Grid de Botones de Brocha */
+/* Tools Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.row { display: flex; gap: 5px; }
+.tool-btn { padding: 8px; }
+.tool-btn.active { background-color: var(--accent); color: white; border-color: var(--accent); }
+.full { width: 100%; margin-top: 5px; } .half { flex: 1; }
+
+/* Brush Grid */
 .brush-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .brush-btn { height: 35px; font-size: 16px; padding: 0; display: flex; align-items: center; justify-content: center; }
 .brush-btn.active { background-color: var(--accent); border-color: var(--accent); color: white; }
@@ -83,7 +90,6 @@ button:hover { background-color: var(--bg-hover); }
 /* Inputs */
 .slider { width: 100%; height: 4px; background: #444; -webkit-appearance: none; border-radius: 2px; }
 .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: var(--text-main); border-radius: 50%; cursor: pointer; border: 2px solid #1e1e1e; }
-
 .color-wrapper.big { height: 40px; border: 1px solid var(--border); padding: 2px; background: var(--bg-tool); }
 input[type="color"] { width: 100%; height: 100%; border: none; padding: 0; background: none; cursor: pointer; }
 
@@ -96,7 +102,7 @@ input[type="color"] { width: 100%; height: 100%; border: none; padding: 0; backg
 .layer-row:has(input:checked) { background-color: #37373d; border-left: 3px solid var(--accent); }
 .layer-vis { font-size: 10px; opacity: 0.5; }
 
-/* --- CANVAS & ZOOM --- */
+/* --- CANVAS STAGE --- */
 .canvas-stage { width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
 .canvas-container { position: relative; width: 800px; height: 600px; }
 .zoom-layer {
@@ -109,6 +115,7 @@ input[type="color"] { width: 100%; height: 100%; border: none; padding: 0; backg
 canvas { position: absolute; top: 0; left: 0; pointer-events: none; width: 100%; height: 100%; }
 #onionSkinCanvas { opacity: 0.3; }
 
+/* CURSOR */
 #brushCursor {
     position: absolute; border: 1px solid #000; box-shadow: 0 0 0 1px #fff;
     border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); z-index: 9999; display: none;
@@ -131,7 +138,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; width: 100%;
 .flipbook-wrapper { flex: 1; width: 100%; background-color: #151515; overflow-x: auto; overflow-y: hidden; padding: 10px; display: flex; align-items: center; }
 .flipbook-track { display: flex; gap: 8px; height: 100%; align-items: center; }
 
-/* FRAME BOXES */
+/* FRAMES */
 .frame-box { width: 120px; height: 90px; background-color: #252526; border: 2px solid #333; border-radius: 4px; position: relative; cursor: pointer; flex-shrink: 0; transition: 0.1s; overflow: hidden; }
 .frame-box.active { border-color: var(--accent); background-color: #333; }
 .frame-box img { width: 100%; height: 100%; object-fit: contain; background: white; display: block; pointer-events: none; }
@@ -142,3 +149,10 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; width: 100%;
 .frame-box:hover .frame-controls { opacity: 1; pointer-events: auto; }
 .move-btn { width: 24px; height: 24px; background: var(--accent); color: white; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; font-size: 14px; }
 .move-btn:hover { background: #1177bb; transform: scale(1.1); }
+
+/* --- MODAL --- */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 20000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal-content { background: var(--bg-panel); border: 1px solid var(--border); padding: 20px; width: 300px; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.modal-content h3 { margin-top: 0; margin-bottom: 15px; color: var(--text-main); font-size: 14px; text-transform: uppercase; }
+.modal-content input[type="number"] { width: 100%; background: #111; border: 1px solid #444; color: white; padding: 6px; border-radius: 3px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }

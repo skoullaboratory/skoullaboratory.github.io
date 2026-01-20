@@ -1,16 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ==========================================
-    // 1. CONFIGURACIÓN Y REFERENCIAS
+    // 1. CONFIGURACIÓN
     // ==========================================
     const CONFIG = {
         width: 800,
         height: 600,
         layerCount: 4,
-        maxHistory: 30
+        maxHistory: 30,
+        pixelArtMode: false
     };
 
-    // Referencias UI
+    // UI Refs
     const appGrid = document.getElementById('appGrid');
     const canvasContainer = document.getElementById('canvasContainer');
     const zoomLayer = document.getElementById('zoomLayer');
@@ -18,11 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomInfo = document.getElementById('zoomInfo');
     const timelineStrip = document.getElementById('timelineStrip');
     
-    // Auxiliares
     const auxCanvas = document.getElementById('auxCanvas');
     const auxCtx = auxCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Onion Skin
     const onionSkinCanvas = document.getElementById('onionSkinCanvas');
     const onionCtx = onionSkinCanvas.getContext('2d');
     const btnOnionSkin = document.getElementById('btnOnionSkin');
@@ -36,8 +35,17 @@ document.addEventListener('DOMContentLoaded', () => {
         contexts.push(c.getContext('2d', { willReadFrequently: true }));
     }
 
+    // Modal Resize
+    const resizeModal = document.getElementById('resizeModal');
+    const resizeWidthInput = document.getElementById('resizeWidth');
+    const resizeHeightInput = document.getElementById('resizeHeight');
+    const resizeAlgoSelect = document.getElementById('resizeAlgo');
+    const btnResizeTool = document.getElementById('btnResizeTool');
+    const btnConfirmResize = document.getElementById('btnConfirmResize');
+    const btnCancelResize = document.getElementById('btnCancelResize');
+
     // ==========================================
-    // 2. ESTADO DE LA APLICACIÓN
+    // 2. ESTADO
     // ==========================================
     const STATE = {
         currentFrameIndex: 0,
@@ -48,23 +56,17 @@ document.addEventListener('DOMContentLoaded', () => {
         playInterval: null,
         fps: 12,
         
-        tool: 'brush',
+        tool: 'brush', 
         brushColor: '#000000',
         brushSize: 5,
         brushOpacity: 1, 
-        brushStyle: 'round', // round, square, spray, marker
+        brushStyle: 'round', 
         
         activeLayerIndex: 0,
         isDrawing: false,
         
-        // Coordenadas anteriores para interpolación
-        lastX: 0,
-        lastY: 0,
-        
-        // Zoom
-        scale: 1,
-        panX: 0,
-        panY: 0,
+        lastX: 0, lastY: 0,
+        scale: 1, panX: 0, panY: 0,
         lastThumbUpdate: 0
     };
 
@@ -72,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRedoStack = [];
 
     // ==========================================
-    // 3. CORE: DIBUJO Y CANVAS
+    // 3. CORE: CANVAS HELPERS
     // ==========================================
 
     function clearAllLayers() {
@@ -90,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return canvases.map(c => c.toDataURL());
     }
 
-    // ASYNC LOAD: Clave para arreglar el bug de previsualización vacía
     function loadLayersData(frameData) {
         clearAllLayers();
         if (!frameData) return Promise.resolve();
@@ -100,28 +101,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (dataUrl && dataUrl.length > 50) {
                     const img = new Image();
                     img.onload = () => {
+                        contexts[idx].imageSmoothingEnabled = !CONFIG.pixelArtMode;
                         contexts[idx].drawImage(img, 0, 0);
                         resolve();
                     };
-                    img.onerror = resolve; // Resolvemos aunque falle para no bloquear
+                    img.onerror = resolve; 
                     img.src = dataUrl;
                 } else {
                     resolve();
                 }
             });
         });
-
         return Promise.all(promises);
     }
 
     // ==========================================
-    // 4. LÓGICA DE DIBUJO (CORREGIDA: INTERPOLACIÓN)
+    // 4. MOTOR DE DIBUJO
     // ==========================================
 
-    // Función matemática para interpolar puntos entre A y B
-    function lerp(start, end, t) {
-        return start + (end - start) * t;
-    }
+    function lerp(start, end, t) { return start + (end - start) * t; }
 
     function draw(x, y, isDrag) {
         const ctx = contexts[STATE.activeLayerIndex];
@@ -129,34 +127,14 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.globalAlpha = STATE.brushOpacity;
         ctx.fillStyle = STATE.brushColor;
         ctx.strokeStyle = STATE.brushColor;
+        ctx.imageSmoothingEnabled = !CONFIG.pixelArtMode;
 
-        // --- BORRADOR ---
         if (STATE.tool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.globalAlpha = 1; 
-            ctx.lineWidth = STATE.brushSize;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            if (isDrag) {
-                ctx.moveTo(STATE.lastX, STATE.lastY);
-                ctx.lineTo(x, y);
-            } else {
-                ctx.arc(x, y, STATE.brushSize / 2, 0, Math.PI * 2);
-                ctx.fill(); // Usamos fill para un punto instantáneo
-            }
-            ctx.stroke();
-            
-            // Actualizamos posición anterior
-            STATE.lastX = x; 
-            STATE.lastY = y;
-            return;
-        } 
-        
-        // --- PINCEL ---
-        ctx.globalCompositeOperation = 'source-over';
+        } else {
+            ctx.globalCompositeOperation = 'source-over';
+        }
 
-        // 1. SPRAY
         if (STATE.brushStyle === 'spray') {
             const radius = STATE.brushSize;
             const density = Math.max(1, radius * 1.5);
@@ -171,33 +149,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 2. CUADRADO / MARCADOR (SIN ROTACIÓN)
-        // Usamos interpolación manual para "estampar" cuadrados
         if (STATE.brushStyle === 'square' || STATE.brushStyle === 'marker') {
-            
-            if (STATE.brushStyle === 'marker' && STATE.brushOpacity > 0.5) {
-                ctx.globalAlpha = 0.5; // Efecto marcador
-            }
-
+            if (STATE.brushStyle === 'marker' && STATE.brushOpacity > 0.5) ctx.globalAlpha = 0.5 * STATE.brushOpacity; 
             const size = STATE.brushSize;
             
             if (!isDrag) {
-                // Click simple: dibuja un cuadrado
                 ctx.fillRect(x - size/2, y - size/2, size, size);
             } else {
-                // Arrastre: Interpolar desde la última posición hasta la actual
                 const dist = Math.hypot(x - STATE.lastX, y - STATE.lastY);
-                // Calculamos cuántos cuadrados dibujar para rellenar el hueco
-                // Un paso de "size/4" suele dar un trazo suave sin demasiada sobrecarga
                 const steps = Math.ceil(dist / (Math.max(1, size / 8))); 
-
                 for (let i = 1; i <= steps; i++) {
                     const t = i / steps;
-                    const curX = lerp(STATE.lastX, x, t);
-                    const curY = lerp(STATE.lastX, y, t); // Oops, typo fixed below
-                    const intX = STATE.lastX + (x - STATE.lastX) * t;
-                    const intY = STATE.lastY + (y - STATE.lastY) * t;
-                    
+                    const intX = lerp(STATE.lastX, x, t);
+                    const intY = lerp(STATE.lastY, y, t);
                     ctx.fillRect(intX - size/2, intY - size/2, size, size);
                 }
             }
@@ -205,32 +169,134 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 3. REDONDO (ESTÁNDAR)
-        // El redondo no tiene problema de rotación visual porque es un círculo
         ctx.lineWidth = STATE.brushSize;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
         ctx.beginPath();
         if (isDrag) {
             ctx.moveTo(STATE.lastX, STATE.lastY);
             ctx.lineTo(x, y);
             ctx.stroke();
         } else {
-            // Punto simple
             ctx.arc(x, y, STATE.brushSize / 2, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        STATE.lastX = x;
-        STATE.lastY = y;
-        
+        STATE.lastX = x; STATE.lastY = y;
         ctx.globalAlpha = 1.0;
     }
 
+    // ==========================================
+    // 5. RESIZE TOOL & CENTRADO (FIXED)
+    // ==========================================
+
+    btnResizeTool.addEventListener('click', () => {
+        resizeWidthInput.value = CONFIG.width;
+        resizeHeightInput.value = CONFIG.height;
+        resizeModal.style.display = 'flex';
+    });
+
+    btnCancelResize.addEventListener('click', () => resizeModal.style.display = 'none');
+
+    btnConfirmResize.addEventListener('click', async () => {
+        const newW = parseInt(resizeWidthInput.value) || 800;
+        const newH = parseInt(resizeHeightInput.value) || 600;
+        const algo = resizeAlgoSelect.value; 
+        
+        await resizeProject(newW, newH, algo);
+        resizeModal.style.display = 'none';
+    });
+
+    // Función inteligente para encajar el lienzo en pantalla
+    function fitCanvasToScreen() {
+        const rect = canvasContainer.parentElement.getBoundingClientRect();
+        const screenW = rect.width;
+        const screenH = rect.height;
+
+        // 1. Calcular escala para ajustar (Fit) con margen del 10%
+        const scaleW = screenW / CONFIG.width;
+        const scaleH = screenH / CONFIG.height;
+        let newScale = Math.min(scaleW, scaleH) * 0.9;
+
+        // 2. Limitar escala (permitimos hasta 100x para pixel art 16x16)
+        newScale = Math.min(Math.max(0.1, newScale), 100); 
+
+        // 3. Centrar matemáticamente basado en la escala y transform-origin 0,0
+        // Fórmula: (AnchoPantalla - (AnchoLienzo * Escala)) / 2
+        const newPanX = (screenW - (CONFIG.width * newScale)) / 2;
+        const newPanY = (screenH - (CONFIG.height * newScale)) / 2;
+
+        STATE.scale = newScale;
+        STATE.panX = newPanX;
+        STATE.panY = newPanY;
+
+        applyZoom();
+    }
+
+    async function resizeProject(newW, newH, algorithm) {
+        const isPixelArt = (algorithm === 'nearest');
+        saveCurrentFrameData();
+
+        const resizeImage = async (srcUrl) => {
+            if (!srcUrl || srcUrl.length < 50) return createEmptyDataUrl(newW, newH);
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const tempC = document.createElement('canvas');
+                    tempC.width = newW; tempC.height = newH;
+                    const tempCtx = tempC.getContext('2d');
+                    tempCtx.imageSmoothingEnabled = !isPixelArt;
+                    if(isPixelArt) tempCtx.imageSmoothingQuality = 'low';
+                    else tempCtx.imageSmoothingQuality = 'high';
+                    tempCtx.drawImage(img, 0, 0, newW, newH);
+                    resolve(tempC.toDataURL());
+                };
+                img.onerror = () => resolve(createEmptyDataUrl(newW, newH));
+                img.src = srcUrl;
+            });
+        };
+
+        const createEmptyDataUrl = (w, h) => {
+            const t = document.createElement('canvas'); t.width = w; t.height = h; return t.toDataURL();
+        }
+
+        const newFrames = [];
+        for (let i = 0; i < STATE.frames.length; i++) {
+            const oldLayers = STATE.frames[i];
+            const newLayers = await Promise.all(oldLayers.map(url => resizeImage(url)));
+            newFrames.push(newLayers);
+        }
+
+        // Aplicar cambios
+        CONFIG.width = newW;
+        CONFIG.height = newH;
+        CONFIG.pixelArtMode = isPixelArt;
+
+        canvasContainer.style.width = newW + 'px';
+        canvasContainer.style.height = newH + 'px';
+        
+        [...canvases, onionSkinCanvas, auxCanvas].forEach(c => {
+            c.width = newW;
+            c.height = newH;
+            if (isPixelArt) c.style.imageRendering = 'pixelated';
+            else c.style.imageRendering = 'auto';
+        });
+
+        STATE.frames = newFrames;
+        STATE.frameHistories = STATE.frames.map(() => ({ undo: [], redo: [] }));
+        currentUndoStack = [];
+        currentRedoStack = [];
+
+        await changeFrame(STATE.currentFrameIndex);
+        
+        // AUTO-CENTRADO AL CAMBIAR TAMAÑO
+        fitCanvasToScreen(); 
+
+        renderTimeline();
+    }
 
     // ==========================================
-    // 5. GESTIÓN DE FRAMES
+    // 6. GESTIÓN DE FRAMES
     // ==========================================
 
     function saveCurrentFrameData() {
@@ -242,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Cambio de frame ASÍNCRONO para asegurar carga visual
     async function changeFrame(newIndex) {
         if (newIndex < 0 || newIndex >= STATE.frames.length) return;
         
@@ -252,8 +317,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         STATE.currentFrameIndex = newIndex;
-        
-        // Esperamos a que se pinten las capas
         await loadLayersData(STATE.frames[newIndex]);
 
         if (!STATE.frameHistories[newIndex]) {
@@ -268,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 6. MINIATURAS
+    // 7. MINIATURAS
     // ==========================================
 
     async function generateCleanThumbnailURL(frameIndex) {
@@ -278,6 +341,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tempCtx = tempC.getContext('2d');
         tempCtx.fillStyle = "#FFFFFF"; 
         tempCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+        tempCtx.imageSmoothingEnabled = !CONFIG.pixelArtMode;
+
         const frameLayers = STATE.frames[frameIndex];
         
         await Promise.all(frameLayers.map(src => new Promise(resolve => {
@@ -290,14 +355,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return tempC.toDataURL('image/jpeg', 0.5);
     }
 
-    // Update Live: Ahora acepta FORCE para el Undo/Redo
     function updateLiveThumbnail(force = false) {
         const now = Date.now();
-        if (!force && now - STATE.lastThumbUpdate < 30) return; // Throttle normal
+        if (!force && now - STATE.lastThumbUpdate < 30) return;
         
         STATE.lastThumbUpdate = now;
         auxCtx.fillStyle = "#FFFFFF"; 
         auxCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+        auxCtx.imageSmoothingEnabled = !CONFIG.pixelArtMode;
+        
         canvases.forEach(c => auxCtx.drawImage(c, 0, 0));
         
         const activeBox = timelineStrip.querySelector(`.frame-box[data-index="${STATE.currentFrameIndex}"] img`);
@@ -310,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // 7. HISTORIAL (UNDO/REDO) CORREGIDO
+    // 8. HISTORIAL (UNDO/REDO)
     // ==========================================
     
     function pushHistory() {
@@ -321,35 +387,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performUndo() {
         if (currentUndoStack.length === 0) return;
-        
         currentRedoStack.push(getLayersData());
-        const prevData = currentUndoStack.pop();
-        
-        // Esperar a que se cargue la imagen visualmente
-        await loadLayersData(prevData);
-        
+        await loadLayersData(currentUndoStack.pop());
         saveCurrentFrameData();
-        // Forzar actualización inmediata de la miniatura
         updateLiveThumbnail(true); 
         updateOnionSkin();
     }
 
     async function performRedo() {
         if (currentRedoStack.length === 0) return;
-        
         currentUndoStack.push(getLayersData());
-        const nextData = currentRedoStack.pop();
-        
-        // Esperar a que se cargue
-        await loadLayersData(nextData);
-        
+        await loadLayersData(currentRedoStack.pop());
         saveCurrentFrameData();
         updateLiveThumbnail(true); 
         updateOnionSkin();
     }
 
     // ==========================================
-    // 8. ONION SKIN
+    // 9. ONION SKIN
     // ==========================================
     let isOnionEnabled = false;
 
@@ -371,6 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
         Promise.all(loadPromises).then(images => {
             onionCtx.globalCompositeOperation = 'source-over';
             onionCtx.clearRect(0, 0, CONFIG.width, CONFIG.height);
+            onionCtx.imageSmoothingEnabled = !CONFIG.pixelArtMode;
+            
             images.forEach(img => { if(img) onionCtx.drawImage(img, 0, 0); });
             onionCtx.globalCompositeOperation = 'source-in';
             onionCtx.fillStyle = 'rgba(50, 150, 255, 1)'; 
@@ -387,15 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
-    // 9. INPUTS
+    // 10. INPUTS & ZOOM
     // ==========================================
     
-    // Zoom Inicial
-    const rect = canvasContainer.parentElement.getBoundingClientRect();
-    STATE.panX = (rect.width - CONFIG.width) / 2;
-    STATE.panY = (rect.height - CONFIG.height) / 2;
-    applyZoom();
-
     function applyZoom() {
         zoomLayer.style.transform = `translate(${STATE.panX}px, ${STATE.panY}px) scale(${STATE.scale})`;
         zoomInfo.textContent = Math.round(STATE.scale * 100) + '%';
@@ -431,11 +482,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Eventos
     canvasContainer.addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = -Math.sign(e.deltaY) * 0.1;
-        STATE.scale = Math.min(Math.max(0.1, STATE.scale + delta), 5);
+        // Permitir zoom alto (hasta 100x) para Pixel Art
+        STATE.scale = Math.min(Math.max(0.1, STATE.scale + delta), 100);
         applyZoom();
         updateCursor(e);
     }, { passive: false });
@@ -452,19 +503,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     canvasContainer.addEventListener('mousedown', (e) => {
         if (STATE.isPlaying) return;
-        
-        // Inicializar lastX/Y para la interpolación
         const pos = getPointerPos(e);
-        STATE.lastX = pos.x;
-        STATE.lastY = pos.y;
-
+        STATE.lastX = pos.x; STATE.lastY = pos.y;
         if (e.button === 0) {
-            pushHistory(); 
-            STATE.isDrawing = true;
-            draw(pos.x, pos.y, false);
-            updateLiveThumbnail();
+            pushHistory(); STATE.isDrawing = true; draw(pos.x, pos.y, false); updateLiveThumbnail();
         }
-        if (e.button === 1) { // Pan
+        if (e.button === 1) { 
             e.preventDefault();
             const startX = e.clientX, startY = e.clientY;
             const initialPanX = STATE.panX, initialPanY = STATE.panY;
@@ -490,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     canvasContainer.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; STATE.isDrawing = false; });
 
     // ==========================================
-    // 10. TIMELINE UI
+    // 11. TIMELINE UI
     // ==========================================
 
     function renderTimeline() {
@@ -511,12 +555,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const controls = document.createElement('div');
             controls.className = 'frame-controls';
             
-            const btnLeft = document.createElement('button');
-            btnLeft.className = 'move-btn'; btnLeft.textContent = '<';
+            const btnLeft = document.createElement('button'); btnLeft.className = 'move-btn'; btnLeft.textContent = '<';
             btnLeft.onclick = (e) => { e.stopPropagation(); moveFrame(index, index - 1); };
 
-            const btnRight = document.createElement('button');
-            btnRight.className = 'move-btn'; btnRight.textContent = '>';
+            const btnRight = document.createElement('button'); btnRight.className = 'move-btn'; btnRight.textContent = '>';
             btnRight.onclick = (e) => { e.stopPropagation(); moveFrame(index, index + 1); };
 
             if(index > 0) controls.appendChild(btnLeft); else controls.appendChild(document.createElement('div'));
@@ -524,7 +566,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             box.appendChild(img); box.appendChild(badge); box.appendChild(controls);
             box.addEventListener('click', () => { if(!STATE.isPlaying) changeFrame(index); });
-            
             box.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', index); box.classList.add('dragging'); });
             box.addEventListener('dragend', () => box.classList.remove('dragging'));
             box.addEventListener('dragover', (e) => e.preventDefault());
@@ -549,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToActiveThumbnail();
     }
 
-    // Botones Frames
     document.getElementById('btnAddFrame').addEventListener('click', () => {
         saveCurrentFrameData();
         STATE.frames.splice(STATE.currentFrameIndex + 1, 0, createEmptyFrameData());
@@ -575,10 +615,6 @@ document.addEventListener('DOMContentLoaded', () => {
         changeFrame(newIdx); 
         renderTimeline();
     });
-
-    // ==========================================
-    // UI UPDATES
-    // ==========================================
 
     function updateUI() {
         document.getElementById('frameIndicator').textContent = `Frame ${STATE.currentFrameIndex + 1}/${STATE.frames.length}`;
@@ -640,15 +676,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    const togglePanel = (id, className, btnShowId) => {
-        appGrid.classList.add(className);
-        document.getElementById(btnShowId).style.display = 'flex';
-    };
-    const showPanel = (id, className, btnShowId) => {
-        appGrid.classList.remove(className);
-        document.getElementById(btnShowId).style.display = 'none';
-    };
-
+    const togglePanel = (id, className, btnShowId) => { appGrid.classList.add(className); document.getElementById(btnShowId).style.display = 'flex'; };
+    const showPanel = (id, className, btnShowId) => { appGrid.classList.remove(className); document.getElementById(btnShowId).style.display = 'none'; };
     document.getElementById('btnToggleLeft').onclick = () => togglePanel('leftPanel', 'hide-left', 'btnShowLeft');
     document.getElementById('btnShowLeft').onclick = () => showPanel('leftPanel', 'hide-left', 'btnShowLeft');
     document.getElementById('btnToggleRight').onclick = () => togglePanel('rightPanel', 'hide-right', 'btnShowRight');
@@ -656,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnToggleTimeline').onclick = () => togglePanel('timelinePanel', 'hide-bottom', 'btnShowTimeline');
     document.getElementById('btnShowTimeline').onclick = () => showPanel('timelinePanel', 'hide-bottom', 'btnShowTimeline');
 
+    // Playback
     const btnPlay = document.getElementById('btnPlayPause');
     btnPlay.onclick = togglePlay;
     document.getElementById('fpsInputNumber').onchange = (e) => { STATE.fps = parseInt(e.target.value) || 12; if(STATE.isPlaying){togglePlay(); togglePlay();} };
@@ -715,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recorder.start();
         for (let i = 0; i < STATE.frames.length; i++) {
             auxCtx.fillStyle = "#FFFFFF"; auxCtx.fillRect(0,0,CONFIG.width, CONFIG.height);
+            auxCtx.imageSmoothingEnabled = !CONFIG.pixelArtMode;
             const layers = STATE.frames[i];
             for (let l = 0; l < layers.length; l++) {
                  await new Promise(r => {
@@ -730,5 +761,7 @@ document.addEventListener('DOMContentLoaded', () => {
     STATE.frames.push(createEmptyFrameData());
     STATE.frameHistories.push({ undo: [], redo: [] });
     changeFrame(0);
+    // Auto-ajustar al inicio
+    fitCanvasToScreen();
     renderTimeline();
 });
