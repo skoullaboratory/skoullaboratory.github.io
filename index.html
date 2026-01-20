@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Animator JS - Studio UI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-grid" id="appGrid">
+        
+        <aside class="panel sidebar left" id="leftPanel">
+            <div class="panel-header">
+                HERRAMIENTAS
+                <button id="btnToggleLeft" class="toggle-btn" title="Ocultar">◀</button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="control-group grid-2">
+                    <button id="btnBrush" class="tool-btn active">🖊️ Pincel</button>
+                    <button id="btnEraser" class="tool-btn">🧼 Borrar</button>
+                </div>
+                
+                <div class="control-group row">
+                    <button id="btnUndo" class="tool-btn half" title="Deshacer (Ctrl+Z)">↶</button>
+                    <button id="btnRedo" class="tool-btn half" title="Rehacer (Ctrl+Y)">↷</button>
+                </div>
+
+                <div class="separator"></div>
+                <button id="btnOnionSkin" class="tool-btn full">🧅 Piel de Cebolla</button>
+                <button id="btnClearLayer" class="tool-btn full" style="margin-top: 5px;">🗑️ Limpiar Capa</button>
+                
+                <div class="separator"></div>
+
+                <div class="panel-header-sub">CAPAS</div>
+                <div class="layers-list">
+                    <label class="layer-row">
+                        <input type="radio" name="layer" value="3">
+                        <span class="layer-name">Capa 4</span>
+                        <span class="layer-vis">👁️</span>
+                    </label>
+                    <label class="layer-row">
+                        <input type="radio" name="layer" value="2">
+                        <span class="layer-name">Capa 3</span>
+                        <span class="layer-vis">👁️</span>
+                    </label>
+                    <label class="layer-row">
+                        <input type="radio" name="layer" value="1">
+                        <span class="layer-name">Capa 2</span>
+                        <span class="layer-vis">👁️</span>
+                    </label>
+                    <label class="layer-row active-layer">
+                        <input type="radio" name="layer" value="0" checked>
+                        <span class="layer-name">Capa 1</span>
+                        <span class="layer-vis">👁️</span>
+                    </label>
+                </div>
+            </div>
+        </aside>
+
+        <button id="btnShowLeft" class="restore-panel-btn left" style="display:none;">▶</button>
+
+
+        <main class="panel viewport">
+            <div class="canvas-stage">
+                <div class="canvas-container" id="canvasContainer">
+                    <div id="brushCursor"></div>
+                    <div id="zoomLayer" class="zoom-layer">
+                        <canvas id="onionSkinCanvas" width="800" height="600"></canvas>
+                        <canvas id="layer0" width="800" height="600"></canvas>
+                        <canvas id="layer1" width="800" height="600"></canvas>
+                        <canvas id="layer2" width="800" height="600"></canvas>
+                        <canvas id="layer3" width="800" height="600"></canvas>
+                    </div>
+                    <canvas id="auxCanvas" width="800" height="600" style="display:none;"></canvas>
+                </div>
+            </div>
+            <div class="zoom-info" id="zoomInfo">100%</div>
+        </main>
+
+
+        <aside class="panel sidebar right" id="rightPanel">
+            <div class="panel-header">
+                <button id="btnToggleRight" class="toggle-btn" title="Ocultar">▶</button>
+                PROPIEDADES DE PINCEL
+            </div>
+            
+            <div class="panel-content">
+                
+                <div class="control-group">
+                    <label>Color</label>
+                    <div class="color-wrapper big">
+                        <input type="color" id="colorPicker" value="#000000">
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+
+                <div class="control-group">
+                    <label>Estilo de Punta</label>
+                    <div class="brush-grid">
+                        <button class="brush-btn active" data-type="round" title="Redondo">●</button>
+                        <button class="brush-btn" data-type="square" title="Cuadrado">■</button>
+                        <button class="brush-btn" data-type="spray" title="Spray">░</button>
+                        <button class="brush-btn" data-type="marker" title="Marcador">///</button>
+                    </div>
+                </div>
+
+                <div class="separator"></div>
+
+                <div class="control-group">
+                    <div class="slider-header">
+                        <label>Tamaño</label>
+                        <span id="brushSizeVal">5 px</span>
+                    </div>
+                    <input type="range" id="brushSize" min="1" max="100" value="5" class="slider">
+                </div>
+
+                <div class="control-group">
+                    <div class="slider-header">
+                        <label>Opacidad</label>
+                        <span id="brushOpacityVal">100%</span>
+                    </div>
+                    <input type="range" id="brushOpacity" min="1" max="100" value="100" class="slider">
+                </div>
+
+            </div>
+        </aside>
+
+        <button id="btnShowRight" class="restore-panel-btn right" style="display:none;">◀</button>
+
+
+        <section class="panel timeline" id="timelinePanel">
+            <div class="timeline-toolbar">
+                <div class="group-left">
+                    <button id="btnPrevFrame" class="icon-btn">⏮</button>
+                    <button id="btnPlayPause" class="icon-btn play-btn">▶</button>
+                    <button id="btnNextFrame" class="icon-btn">⏭</button>
+                    <div class="fps-input">
+                        <span>FPS:</span>
+                        <input type="number" id="fpsInputNumber" value="12" min="1" max="60">
+                    </div>
+                    <span id="frameIndicator" class="counter">Frame 1</span>
+                </div>
+                <div class="group-center">
+                    <button id="btnAddFrame" class="btn-action add">+</button>
+                    <button id="btnDupFrame" class="btn-action">Copiar</button>
+                    <button id="btnDelFrame" class="btn-action del">🗑</button>
+                </div>
+                <div class="group-right">
+                    <button id="btnToggleTimeline" class="toggle-btn" title="Ocultar Timeline">▼</button>
+                    <button id="btnExportWebM" class="btn-export">Exportar</button>
+                </div>
+            </div>
+
+            <div class="flipbook-wrapper">
+                <div class="flipbook-track" id="timelineStrip"></div>
+            </div>
+        </section>
+
+        <button id="btnShowTimeline" class="restore-panel-btn bottom" style="display:none;">▲</button>
+
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
