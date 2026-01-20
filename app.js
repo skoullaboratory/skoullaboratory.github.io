@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ==========================================
-    // CONFIGURACIÓN Y REFERENCIAS
+    // 1. CONFIGURACIÓN Y REFERENCIAS
     // ==========================================
     const CONFIG = {
         width: 800,
@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
         maxHistory: 30
     };
 
-    // UI Elements
+    // Referencias UI
     const appGrid = document.getElementById('appGrid');
     const canvasContainer = document.getElementById('canvasContainer');
     const zoomLayer = document.getElementById('zoomLayer');
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const onionCtx = onionSkinCanvas.getContext('2d');
     const btnOnionSkin = document.getElementById('btnOnionSkin');
 
-    // Capas de dibujo
+    // Capas
     const canvases = [];
     const contexts = [];
     for(let i = 0; i < CONFIG.layerCount; i++) {
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // ESTADO DE LA APLICACIÓN
+    // 2. ESTADO DE LA APLICACIÓN
     // ==========================================
     const STATE = {
         currentFrameIndex: 0,
@@ -48,15 +48,18 @@ document.addEventListener('DOMContentLoaded', () => {
         playInterval: null,
         fps: 12,
         
-        // PINCEL AVANZADO
         tool: 'brush',
         brushColor: '#000000',
         brushSize: 5,
-        brushOpacity: 1, // 0 a 1
+        brushOpacity: 1, 
         brushStyle: 'round', // round, square, spray, marker
         
         activeLayerIndex: 0,
         isDrawing: false,
+        
+        // Coordenadas anteriores para interpolación
+        lastX: 0,
+        lastY: 0,
         
         // Zoom
         scale: 1,
@@ -69,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRedoStack = [];
 
     // ==========================================
-    // CORE: DIBUJO AVANZADO
+    // 3. CORE: DIBUJO Y CANVAS
     // ==========================================
 
     function clearAllLayers() {
@@ -87,89 +90,147 @@ document.addEventListener('DOMContentLoaded', () => {
         return canvases.map(c => c.toDataURL());
     }
 
+    // ASYNC LOAD: Clave para arreglar el bug de previsualización vacía
     function loadLayersData(frameData) {
         clearAllLayers();
-        if (!frameData) return;
-        frameData.forEach((dataUrl, idx) => {
-            if (dataUrl && dataUrl.length > 50) {
-                const img = new Image();
-                img.onload = () => contexts[idx].drawImage(img, 0, 0);
-                img.src = dataUrl;
-            }
+        if (!frameData) return Promise.resolve();
+
+        const promises = frameData.map((dataUrl, idx) => {
+            return new Promise(resolve => {
+                if (dataUrl && dataUrl.length > 50) {
+                    const img = new Image();
+                    img.onload = () => {
+                        contexts[idx].drawImage(img, 0, 0);
+                        resolve();
+                    };
+                    img.onerror = resolve; // Resolvemos aunque falle para no bloquear
+                    img.src = dataUrl;
+                } else {
+                    resolve();
+                }
+            });
         });
+
+        return Promise.all(promises);
     }
 
-    // --- LÓGICA DE DIBUJO ---
+    // ==========================================
+    // 4. LÓGICA DE DIBUJO (CORREGIDA: INTERPOLACIÓN)
+    // ==========================================
+
+    // Función matemática para interpolar puntos entre A y B
+    function lerp(start, end, t) {
+        return start + (end - start) * t;
+    }
+
     function draw(x, y, isDrag) {
         const ctx = contexts[STATE.activeLayerIndex];
         
-        // Configuración Común
         ctx.globalAlpha = STATE.brushOpacity;
-        ctx.strokeStyle = STATE.brushColor;
         ctx.fillStyle = STATE.brushColor;
+        ctx.strokeStyle = STATE.brushColor;
 
+        // --- BORRADOR ---
         if (STATE.tool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.globalAlpha = 1; // El borrador borra fuerte siempre
+            ctx.globalAlpha = 1; 
             ctx.lineWidth = STATE.brushSize;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            if (!isDrag) ctx.beginPath();
-            ctx.lineTo(x, y);
+            ctx.beginPath();
+            if (isDrag) {
+                ctx.moveTo(STATE.lastX, STATE.lastY);
+                ctx.lineTo(x, y);
+            } else {
+                ctx.arc(x, y, STATE.brushSize / 2, 0, Math.PI * 2);
+                ctx.fill(); // Usamos fill para un punto instantáneo
+            }
             ctx.stroke();
+            
+            // Actualizamos posición anterior
+            STATE.lastX = x; 
+            STATE.lastY = y;
             return;
         } 
         
-        // MODO PINCEL
+        // --- PINCEL ---
         ctx.globalCompositeOperation = 'source-over';
 
-        // 1. SPRAY / AERÓGRAFO
+        // 1. SPRAY
         if (STATE.brushStyle === 'spray') {
             const radius = STATE.brushSize;
-            const density = Math.max(1, radius * 1.5); // Más puntos cuanto más grande
-            
+            const density = Math.max(1, radius * 1.5);
             for (let i = 0; i < density; i++) {
-                // Punto aleatorio dentro del círculo
                 const angle = Math.random() * Math.PI * 2;
                 const r = Math.sqrt(Math.random()) * radius;
                 const px = x + r * Math.cos(angle);
                 const py = y + r * Math.sin(angle);
-                
                 ctx.fillRect(px, py, 1, 1);
             }
-            return; // El spray no usa lineTo
+            STATE.lastX = x; STATE.lastY = y;
+            return;
         }
 
-        // 2. OTROS ESTILOS (Trazado continuo)
+        // 2. CUADRADO / MARCADOR (SIN ROTACIÓN)
+        // Usamos interpolación manual para "estampar" cuadrados
+        if (STATE.brushStyle === 'square' || STATE.brushStyle === 'marker') {
+            
+            if (STATE.brushStyle === 'marker' && STATE.brushOpacity > 0.5) {
+                ctx.globalAlpha = 0.5; // Efecto marcador
+            }
+
+            const size = STATE.brushSize;
+            
+            if (!isDrag) {
+                // Click simple: dibuja un cuadrado
+                ctx.fillRect(x - size/2, y - size/2, size, size);
+            } else {
+                // Arrastre: Interpolar desde la última posición hasta la actual
+                const dist = Math.hypot(x - STATE.lastX, y - STATE.lastY);
+                // Calculamos cuántos cuadrados dibujar para rellenar el hueco
+                // Un paso de "size/4" suele dar un trazo suave sin demasiada sobrecarga
+                const steps = Math.ceil(dist / (Math.max(1, size / 8))); 
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const curX = lerp(STATE.lastX, x, t);
+                    const curY = lerp(STATE.lastX, y, t); // Oops, typo fixed below
+                    const intX = STATE.lastX + (x - STATE.lastX) * t;
+                    const intY = STATE.lastY + (y - STATE.lastY) * t;
+                    
+                    ctx.fillRect(intX - size/2, intY - size/2, size, size);
+                }
+            }
+            STATE.lastX = x; STATE.lastY = y;
+            return;
+        }
+
+        // 3. REDONDO (ESTÁNDAR)
+        // El redondo no tiene problema de rotación visual porque es un círculo
         ctx.lineWidth = STATE.brushSize;
-        
-        if (STATE.brushStyle === 'round') {
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-        } else if (STATE.brushStyle === 'square') {
-            ctx.lineCap = 'square';
-            ctx.lineJoin = 'bevel';
-        } else if (STATE.brushStyle === 'marker') {
-            ctx.lineCap = 'square';
-            ctx.lineJoin = 'round';
-            // El marcador es semitransparente acumulativo
-            if(STATE.brushOpacity > 0.5) ctx.globalAlpha = 0.5; 
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        if (isDrag) {
+            ctx.moveTo(STATE.lastX, STATE.lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        } else {
+            // Punto simple
+            ctx.arc(x, y, STATE.brushSize / 2, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        if (!isDrag) {
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        }
+        STATE.lastX = x;
+        STATE.lastY = y;
         
-        ctx.lineTo(x, y);
-        ctx.stroke();
-
-        // Restaurar Alpha
         ctx.globalAlpha = 1.0;
     }
 
+
     // ==========================================
-    // GESTIÓN DE FRAMES
+    // 5. GESTIÓN DE FRAMES
     // ==========================================
 
     function saveCurrentFrameData() {
@@ -181,7 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function changeFrame(newIndex) {
+    // Cambio de frame ASÍNCRONO para asegurar carga visual
+    async function changeFrame(newIndex) {
         if (newIndex < 0 || newIndex >= STATE.frames.length) return;
         
         if (STATE.currentFrameIndex >= 0 && STATE.currentFrameIndex < STATE.frames.length) {
@@ -190,7 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         STATE.currentFrameIndex = newIndex;
-        loadLayersData(STATE.frames[newIndex]);
+        
+        // Esperamos a que se pinten las capas
+        await loadLayersData(STATE.frames[newIndex]);
 
         if (!STATE.frameHistories[newIndex]) {
             STATE.frameHistories[newIndex] = { undo: [], redo: [] };
@@ -204,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // MINIATURAS (PREVISUALIZACIÓN)
+    // 6. MINIATURAS
     // ==========================================
 
     async function generateCleanThumbnailURL(frameIndex) {
@@ -215,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tempCtx.fillStyle = "#FFFFFF"; 
         tempCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
         const frameLayers = STATE.frames[frameIndex];
+        
         await Promise.all(frameLayers.map(src => new Promise(resolve => {
             if (!src || src.length < 50) { resolve(); return; }
             const img = new Image();
@@ -225,12 +290,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return tempC.toDataURL('image/jpeg', 0.5);
     }
 
-    function updateLiveThumbnail() {
+    // Update Live: Ahora acepta FORCE para el Undo/Redo
+    function updateLiveThumbnail(force = false) {
         const now = Date.now();
-        if (now - STATE.lastThumbUpdate < 30) return;
+        if (!force && now - STATE.lastThumbUpdate < 30) return; // Throttle normal
+        
         STATE.lastThumbUpdate = now;
-        auxCtx.fillStyle = "#FFFFFF"; auxCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+        auxCtx.fillStyle = "#FFFFFF"; 
+        auxCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
         canvases.forEach(c => auxCtx.drawImage(c, 0, 0));
+        
         const activeBox = timelineStrip.querySelector(`.frame-box[data-index="${STATE.currentFrameIndex}"] img`);
         if (activeBox) activeBox.src = auxCanvas.toDataURL('image/jpeg', 0.5);
     }
@@ -241,7 +310,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // ONION SKIN
+    // 7. HISTORIAL (UNDO/REDO) CORREGIDO
+    // ==========================================
+    
+    function pushHistory() {
+        currentUndoStack.push(getLayersData());
+        if (currentUndoStack.length > CONFIG.maxHistory) currentUndoStack.shift();
+        currentRedoStack = []; 
+    }
+
+    async function performUndo() {
+        if (currentUndoStack.length === 0) return;
+        
+        currentRedoStack.push(getLayersData());
+        const prevData = currentUndoStack.pop();
+        
+        // Esperar a que se cargue la imagen visualmente
+        await loadLayersData(prevData);
+        
+        saveCurrentFrameData();
+        // Forzar actualización inmediata de la miniatura
+        updateLiveThumbnail(true); 
+        updateOnionSkin();
+    }
+
+    async function performRedo() {
+        if (currentRedoStack.length === 0) return;
+        
+        currentUndoStack.push(getLayersData());
+        const nextData = currentRedoStack.pop();
+        
+        // Esperar a que se cargue
+        await loadLayersData(nextData);
+        
+        saveCurrentFrameData();
+        updateLiveThumbnail(true); 
+        updateOnionSkin();
+    }
+
+    // ==========================================
+    // 8. ONION SKIN
     // ==========================================
     let isOnionEnabled = false;
 
@@ -264,7 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
             onionCtx.globalCompositeOperation = 'source-over';
             onionCtx.clearRect(0, 0, CONFIG.width, CONFIG.height);
             images.forEach(img => { if(img) onionCtx.drawImage(img, 0, 0); });
-            
             onionCtx.globalCompositeOperation = 'source-in';
             onionCtx.fillStyle = 'rgba(50, 150, 255, 1)'; 
             onionCtx.fillRect(0, 0, CONFIG.width, CONFIG.height);
@@ -280,10 +387,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
-    // INPUTS Y EVENTOS UI
+    // 9. INPUTS
     // ==========================================
     
-    // Zoom
+    // Zoom Inicial
     const rect = canvasContainer.parentElement.getBoundingClientRect();
     STATE.panX = (rect.width - CONFIG.width) / 2;
     STATE.panY = (rect.height - CONFIG.height) / 2;
@@ -308,11 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
         brushCursor.style.width = size + 'px';
         brushCursor.style.height = size + 'px';
         
-        // Cambio visual del cursor según tipo
-        if (STATE.brushStyle === 'square') brushCursor.style.borderRadius = '0';
-        else brushCursor.style.borderRadius = '50%';
+        if (STATE.brushStyle === 'square' || STATE.brushStyle === 'marker') {
+            brushCursor.style.borderRadius = '0';
+        } else {
+            brushCursor.style.borderRadius = '50%';
+        }
         
-        // Punteado para spray
         if (STATE.brushStyle === 'spray') brushCursor.style.borderStyle = 'dotted';
         else brushCursor.style.borderStyle = 'solid';
 
@@ -323,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Eventos de Mouse Canvas
+    // Eventos
     canvasContainer.addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = -Math.sign(e.deltaY) * 0.1;
@@ -344,10 +452,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     canvasContainer.addEventListener('mousedown', (e) => {
         if (STATE.isPlaying) return;
+        
+        // Inicializar lastX/Y para la interpolación
+        const pos = getPointerPos(e);
+        STATE.lastX = pos.x;
+        STATE.lastY = pos.y;
+
         if (e.button === 0) {
             pushHistory(); 
             STATE.isDrawing = true;
-            const pos = getPointerPos(e);
             draw(pos.x, pos.y, false);
             updateLiveThumbnail();
         }
@@ -377,31 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
     canvasContainer.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; STATE.isDrawing = false; });
 
     // ==========================================
-    // HISTORIAL Y TIMELINE
+    // 10. TIMELINE UI
     // ==========================================
-    function pushHistory() {
-        currentUndoStack.push(getLayersData());
-        if (currentUndoStack.length > CONFIG.maxHistory) currentUndoStack.shift();
-        currentRedoStack = []; 
-    }
-
-    function performUndo() {
-        if (currentUndoStack.length === 0) return;
-        currentRedoStack.push(getLayersData());
-        loadLayersData(currentUndoStack.pop());
-        saveCurrentFrameData();
-        updateLiveThumbnail();
-        updateOnionSkin();
-    }
-
-    function performRedo() {
-        if (currentRedoStack.length === 0) return;
-        currentUndoStack.push(getLayersData());
-        loadLayersData(currentRedoStack.pop());
-        saveCurrentFrameData();
-        updateLiveThumbnail();
-        updateOnionSkin();
-    }
 
     function renderTimeline() {
         timelineStrip.innerHTML = '';
@@ -482,16 +572,12 @@ document.addEventListener('DOMContentLoaded', () => {
         STATE.frameHistories.splice(STATE.currentFrameIndex, 1);
         let newIdx = STATE.currentFrameIndex;
         if (newIdx >= STATE.frames.length) newIdx = STATE.frames.length - 1;
-        STATE.currentFrameIndex = newIdx;
-        loadLayersData(STATE.frames[newIdx]);
-        const h = STATE.frameHistories[newIdx];
-        currentUndoStack = h.undo; currentRedoStack = h.redo;
+        changeFrame(newIdx); 
         renderTimeline();
-        updateOnionSkin();
     });
 
     // ==========================================
-    // UI UPDATES Y EVENTOS DE PROPIEDADES
+    // UI UPDATES
     // ==========================================
 
     function updateUI() {
@@ -507,7 +593,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
 
-    // HERRAMIENTAS IZQUIERDA
     document.getElementById('btnBrush').onclick = () => { STATE.tool = 'brush'; updateToolBtns(); };
     document.getElementById('btnEraser').onclick = () => { STATE.tool = 'eraser'; updateToolBtns(); };
     function updateToolBtns() {
@@ -516,7 +601,6 @@ document.addEventListener('DOMContentLoaded', () => {
         else document.getElementById('btnEraser').classList.add('active');
     }
 
-    // PROPIEDADES DERECHA
     const brushBtns = document.querySelectorAll('.brush-btn');
     brushBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -556,7 +640,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // PANELES COLLAPSE
     const togglePanel = (id, className, btnShowId) => {
         appGrid.classList.add(className);
         document.getElementById(btnShowId).style.display = 'flex';
@@ -568,14 +651,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('btnToggleLeft').onclick = () => togglePanel('leftPanel', 'hide-left', 'btnShowLeft');
     document.getElementById('btnShowLeft').onclick = () => showPanel('leftPanel', 'hide-left', 'btnShowLeft');
-    
     document.getElementById('btnToggleRight').onclick = () => togglePanel('rightPanel', 'hide-right', 'btnShowRight');
     document.getElementById('btnShowRight').onclick = () => showPanel('rightPanel', 'hide-right', 'btnShowRight');
-    
     document.getElementById('btnToggleTimeline').onclick = () => togglePanel('timelinePanel', 'hide-bottom', 'btnShowTimeline');
     document.getElementById('btnShowTimeline').onclick = () => showPanel('timelinePanel', 'hide-bottom', 'btnShowTimeline');
 
-    // PLAYBACK
     const btnPlay = document.getElementById('btnPlayPause');
     btnPlay.onclick = togglePlay;
     document.getElementById('fpsInputNumber').onchange = (e) => { STATE.fps = parseInt(e.target.value) || 12; if(STATE.isPlaying){togglePlay(); togglePlay();} };
@@ -615,7 +695,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
     });
 
-    // EXPORT
     document.getElementById('btnExportWebM').addEventListener('click', async () => {
         if (STATE.isPlaying) togglePlay();
         const btn = document.getElementById('btnExportWebM');
