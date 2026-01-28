@@ -1,193 +1,131 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Animator JS - Ultimate Version</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-    <div class="app-grid" id="appGrid">
-        
-        <aside class="panel sidebar left" id="leftPanel">
-            <div class="panel-header">
-                HERRAMIENTAS
-                <button id="btnToggleLeft" class="toggle-btn" title="Ocultar">◀</button>
-            </div>
-            
-            <div class="panel-content">
-                <div class="control-group grid-2">
-                    <button id="btnBrush" class="tool-btn active">🖊️ Pincel</button>
-                    <button id="btnEraser" class="tool-btn">🧼 Borrar</button>
-                </div>
-                
-                <div class="control-group row">
-                    <button id="btnUndo" class="tool-btn half" title="Deshacer (Ctrl+Z)">↶</button>
-                    <button id="btnRedo" class="tool-btn half" title="Rehacer (Ctrl+Y)">↷</button>
-                </div>
-
-                <div class="separator"></div>
-                
-                <button id="btnResizeTool" class="tool-btn full">📐 Cambiar Tamaño</button>
-                <button id="btnOnionSkin" class="tool-btn full" style="margin-top:5px">🧅 Piel de Cebolla</button>
-                <button id="btnClearLayer" class="tool-btn full" style="margin-top: 5px;">🗑️ Limpiar Capa</button>
-                
-                <div class="separator"></div>
-
-                <div class="panel-header-sub">CAPAS</div>
-                <div class="layers-list">
-                    <label class="layer-row">
-                        <input type="radio" name="layer" value="3">
-                        <span class="layer-name">Capa 4</span>
-                        <span class="layer-vis">👁️</span>
-                    </label>
-                    <label class="layer-row">
-                        <input type="radio" name="layer" value="2">
-                        <span class="layer-name">Capa 3</span>
-                        <span class="layer-vis">👁️</span>
-                    </label>
-                    <label class="layer-row">
-                        <input type="radio" name="layer" value="1">
-                        <span class="layer-name">Capa 2</span>
-                        <span class="layer-vis">👁️</span>
-                    </label>
-                    <label class="layer-row active-layer">
-                        <input type="radio" name="layer" value="0" checked>
-                        <span class="layer-name">Capa 1</span>
-                        <span class="layer-vis">👁️</span>
-                    </label>
-                </div>
-            </div>
-        </aside>
-
-        <button id="btnShowLeft" class="restore-panel-btn left" style="display:none;">▶</button>
-
-
-        <main class="panel viewport">
-            <div class="canvas-stage">
-                <div class="canvas-container" id="canvasContainer">
-                    <div id="brushCursor"></div>
-                    <div id="zoomLayer" class="zoom-layer">
-                        <canvas id="onionSkinCanvas" width="800" height="600"></canvas>
-                        <canvas id="layer0" width="800" height="600"></canvas>
-                        <canvas id="layer1" width="800" height="600"></canvas>
-                        <canvas id="layer2" width="800" height="600"></canvas>
-                        <canvas id="layer3" width="800" height="600"></canvas>
-                    </div>
-                    <canvas id="auxCanvas" width="800" height="600" style="display:none;"></canvas>
-                </div>
-            </div>
-            <div class="zoom-info" id="zoomInfo">100%</div>
-        </main>
-
-
-        <aside class="panel sidebar right" id="rightPanel">
-            <div class="panel-header">
-                <button id="btnToggleRight" class="toggle-btn" title="Ocultar">▶</button>
-                PROPIEDADES DE PINCEL
-            </div>
-            
-            <div class="panel-content">
-                <div class="control-group">
-                    <label>Color</label>
-                    <div class="color-wrapper big">
-                        <input type="color" id="colorPicker" value="#000000">
-                    </div>
-                </div>
-
-                <div class="separator"></div>
-
-                <div class="control-group">
-                    <label>Estilo de Punta</label>
-                    <div class="brush-grid">
-                        <button class="brush-btn active" data-type="round" title="Redondo">●</button>
-                        <button class="brush-btn" data-type="square" title="Cuadrado">■</button>
-                        <button class="brush-btn" data-type="spray" title="Spray">░</button>
-                        <button class="brush-btn" data-type="marker" title="Marcador">///</button>
-                    </div>
-                </div>
-
-                <div class="separator"></div>
-
-                <div class="control-group">
-                    <div class="slider-header">
-                        <label>Tamaño</label>
-                        <span id="brushSizeVal">5 px</span>
-                    </div>
-                    <input type="range" id="brushSize" min="1" max="100" value="5" class="slider">
-                </div>
-
-                <div class="control-group">
-                    <div class="slider-header">
-                        <label>Opacidad</label>
-                        <span id="brushOpacityVal">100%</span>
-                    </div>
-                    <input type="range" id="brushOpacity" min="1" max="100" value="100" class="slider">
-                </div>
-            </div>
-        </aside>
-
-        <button id="btnShowRight" class="restore-panel-btn right" style="display:none;">◀</button>
-
-
-        <section class="panel timeline" id="timelinePanel">
-            <div class="timeline-toolbar">
-                <div class="group-left">
-                    <button id="btnPrevFrame" class="icon-btn">⏮</button>
-                    <button id="btnPlayPause" class="icon-btn play-btn">▶</button>
-                    <button id="btnNextFrame" class="icon-btn">⏭</button>
-                    <div class="fps-input">
-                        <span>FPS:</span>
-                        <input type="number" id="fpsInputNumber" value="12" min="1" max="60">
-                    </div>
-                    <span id="frameIndicator" class="counter">Frame 1</span>
-                </div>
-                <div class="group-center">
-                    <button id="btnAddFrame" class="btn-action add">+</button>
-                    <button id="btnDupFrame" class="btn-action">Copiar</button>
-                    <button id="btnDelFrame" class="btn-action del">🗑</button>
-                </div>
-                <div class="group-right">
-                    <button id="btnToggleTimeline" class="toggle-btn" title="Ocultar Timeline">▼</button>
-                    <button id="btnExportWebM" class="btn-export">Exportar</button>
-                </div>
-            </div>
-
-            <div class="flipbook-wrapper">
-                <div class="flipbook-track" id="timelineStrip"></div>
-            </div>
-        </section>
-
-        <button id="btnShowTimeline" class="restore-panel-btn bottom" style="display:none;">▲</button>
-
-        <div id="resizeModal" class="modal-overlay" style="display:none;">
-            <div class="modal-content">
-                <h3>Ajustar Tamaño de Lienzo</h3>
-                <div class="control-group">
-                    <label>Ancho (px)</label>
-                    <input type="number" id="resizeWidth" value="800" min="1" max="4096">
-                </div>
-                <div class="control-group">
-                    <label>Alto (px)</label>
-                    <input type="number" id="resizeHeight" value="600" min="1" max="4096">
-                </div>
-                <div class="control-group">
-                    <label>Re-muestreo (Algoritmo)</label>
-                    <select id="resizeAlgo" style="width:100%; padding:5px; background:#333; color:white; border:1px solid #444;">
-                        <option value="bilinear">Bilinear (Suave / Estándar)</option>
-                        <option value="nearest">Nearest Neighbor (Pixel Art)</option>
-                    </select>
-                </div>
-                <p style="font-size:11px; color:#aaa; margin-top:10px;">Nota: Esta acción reiniciará el historial de deshacer.</p>
-                <div class="modal-actions">
-                    <button id="btnCancelResize" class="tool-btn">Cancelar</button>
-                    <button id="btnConfirmResize" class="tool-btn active">Aplicar</button>
-                </div>
-            </div>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity WebGL Player | san valentin peticion</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
         </div>
-
+      </div>
+      <div id="unity-warning"> </div>
+      <div id="unity-footer">
+        <div id="unity-webgl-logo"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">san valentin peticion</div>
+      </div>
     </div>
-    <script src="app.js"></script>
-</body>
+    <script>
+
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var warningBanner = document.querySelector("#unity-warning");
+
+      // Shows a temporary message banner/ribbon for a few seconds, or
+      // a permanent error message on top of the canvas if type=='error'.
+      // If type=='warning', a yellow highlight color is used.
+      // Modify or remove this function to customize the visually presented
+      // way that non-critical warnings and error messages are presented to the
+      // user.
+      function unityShowBanner(msg, type) {
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/skoullaboratory.github.io.loader.js";
+      var config = {
+        dataUrl: buildUrl + "/skoullaboratory.github.io.data",
+        frameworkUrl: buildUrl + "/skoullaboratory.github.io.framework.js",
+        codeUrl: buildUrl + "/skoullaboratory.github.io.wasm",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "san valentin peticion",
+        productVersion: "1.0",
+        showBanner: unityShowBanner,
+      };
+
+      // By default, Unity keeps WebGL canvas render target size matched with
+      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+      // Set this to false if you want to decouple this synchronization from
+      // happening inside the engine, and you would instead like to size up
+      // the canvas DOM size and WebGL render target sizes yourself.
+      // config.matchWebGLToCanvasSize = false;
+
+      // If you would like all file writes inside Unity Application.persistentDataPath
+      // directory to automatically persist so that the contents are remembered when
+      // the user revisits the site the next time, uncomment the following line:
+      // config.autoSyncPersistentDataPath = true;
+      // This autosyncing is currently not the default behavior to avoid regressing
+      // existing user projects that might rely on the earlier manual
+      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
+      // expected to change.
+
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        // Mobile device style: fill the whole browser client area with the game canvas:
+
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        container.className = "unity-mobile";
+        canvas.className = "unity-mobile";
+
+        // To lower canvas resolution on mobile devices to gain some
+        // performance, uncomment the following line:
+        // config.devicePixelRatio = 1;
+
+
+      } else {
+        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+
+        canvas.style.width = "960px";
+        canvas.style.height = "600px";
+      }
+
+      loadingBar.style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+              }).then((unityInstance) => {
+                loadingBar.style.display = "none";
+                fullscreenButton.onclick = () => {
+                  unityInstance.SetFullscreen(1);
+                };
+              }).catch((message) => {
+                alert(message);
+              });
+            };
+
+      document.body.appendChild(script);
+
+    </script>
+  </body>
 </html>
